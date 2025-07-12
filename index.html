@@ -437,10 +437,25 @@
     const SYNOPTIC_API_TOKEN = '81ebbb6ea61247ac85cb88a96d97fcf2';
     const SYNOPTIC_API_BASE_URL = 'https://api.synopticdata.com/v2/';
     let allObservations = [], allTimestamps = [], currentStationId = null;
-    const pressureTendencyCodes = {0:"Rising, then falling",1:"Rising slowly",2:"Rising steadily",3:"Rising quickly",4:"Steady",5:"Falling, then rising",6:"Falling slowly",7:"Falling steadily",8:"Falling quickly"};
+    const pressureTendencyCodes = {
+      0: "Rising, then falling",
+      1: "Rising slowly",
+      2: "Rising steadily",
+      3: "Rising quickly",
+      4: "Steady",
+      5: "Falling, then rising",
+      6: "Falling slowly",
+      7: "Falling steadily",
+      8: "Falling quickly"
+    };
 
     function convertToAmericanUnits(observations, variables) {
-      const converted = {}, lastNonNullValues = {}, excludedVars = ['air_temp_high_6_hour_set_1','air_temp_low_6_hour_set_1','air_temp_high_24_hour_set_1','air_temp_low_24_hour_set_1','precip_accum_one_hour_set_1','precip_accum_three_hour_set_1','precip_accum_six_hour_set_1','precip_accum_24_hour_set_1'];
+      const converted = {}, lastNonNullValues = {}, excludedVars = [
+        'air_temp_high_6_hour_set_1', 'air_temp_low_6_hour_set_1',
+        'air_temp_high_24_hour_set_1', 'air_temp_low_24_hour_set_1',
+        'precip_accum_one_hour_set_1', 'precip_accum_three_hour_set_1',
+        'precip_accum_six_hour_set_1', 'precip_accum_24_hour_set_1'
+      ];
       const unitMap = {
         temperature: ['air_temp_set_1', 'heat_index_set_1d', 'dew_point_temperature_set_1d', 'wet_bulb_temperature_set_1', 'wet_bulb_temp_set_1d'],
         wind: ['wind_speed_set_1', 'wind_gust_set_1', 'peak_wind_speed_set_1'],
@@ -453,6 +468,14 @@
         percentage: ['relative_humidity_set_1'],
         text: ['weather_condition_set_1d', 'weather_summary_set_1d', 'wind_cardinal_direction_set_1d', 'pressure_tendency_set_1']
       };
+
+      function formatPressureTendency(value) {
+        const code = Math.floor(value / 1000);
+        const hPaChange = (value % 1000) / 10;
+        const sign = code >= 0 && code <= 3 ? '+' : (code >= 5 && code <= 8 ? '-' : '');
+        return `${pressureTendencyCodes[code] || 'Unknown'}: ${sign}${hPaChange.toFixed(1)} hPa`;
+      }
+
       variables.forEach(v => {
         if (!observations[v] || !Array.isArray(observations[v]) || observations[v].length !== allTimestamps.length) {
           if (!excludedVars.includes(v)) {
@@ -465,66 +488,60 @@
         converted[v] = observations[v].map((value, i) => {
           if (value !== null && value !== '' && !isNaN(parseFloat(value))) {
             lastNonNull = parseFloat(value);
-            if (unitMap.temperature.includes(v)) {
-              return `${(lastNonNull * 9/5 + 32).toFixed(2)}°F`;
-            } else if (unitMap.wind.includes(v)) {
-              return `${(lastNonNull * 2.23694).toFixed(2)}mph`;
-            } else if (v.includes('altimeter')) {
-              return `${(lastNonNull * 0.0002953).toFixed(2)}inHg`;
-            } else if (unitMap.pressure.includes(v)) {
-              return `${(lastNonNull * 0.01).toFixed(2)}mbar`;
-            } else if (unitMap.precip.includes(v)) {
-              return `${(lastNonNull * 0.03937).toFixed(3)}in`;
-            } else if (v.includes('visibility')) {
-              return `${Math.min((lastNonNull / 1609.34).toFixed(2), 10)}mi`;
-            } else if (v.includes('ceiling')) {
-              return `${(lastNonNull * 3.28084).toFixed(0)}ft`;
-            } else if (v.includes('pressure_tendency')) {
-              const code = Math.floor(lastNonNull / 1000), hPaChange = (lastNonNull % 1000) / 10;
-              const sign = code >= 0 && code <= 3 ? '+' : (code >= 5 && code <= 8 ? '-' : '');
-              return `${pressureTendencyCodes[code] || 'Unknown'}: ${sign}${hPaChange.toFixed(1)} hPa`;
-            } else if (unitMap.wind_direction.includes(v)) {
-              return `${lastNonNull}°`;
-            } else if (unitMap.percentage.includes(v)) {
-              return `${lastNonNull.toFixed(2)}%`;
-            }
+            if (unitMap.temperature.includes(v)) return `${(lastNonNull * 9/5 + 32).toFixed(2)}°F`;
+            if (unitMap.wind.includes(v)) return `${(lastNonNull * 2.23694).toFixed(2)}mph`;
+            if (v.includes('altimeter')) return `${(lastNonNull * 0.0002953).toFixed(2)}inHg`;
+            if (unitMap.pressure.includes(v)) return `${(lastNonNull * 0.01).toFixed(2)}mbar`;
+            if (unitMap.precip.includes(v)) return `${(lastNonNull * 0.03937).toFixed(3)}in`;
+            if (v.includes('visibility')) return `${Math.min((lastNonNull / 1609.34).toFixed(2), 10)}mi`;
+            if (v.includes('ceiling')) return `${(lastNonNull * 3.28084).toFixed(0)}ft`;
+            if (v.includes('pressure_tendency')) return formatPressureTendency(lastNonNull);
+            if (unitMap.wind_direction.includes(v)) return `${lastNonNull}°`;
+            if (unitMap.percentage.includes(v)) return `${lastNonNull.toFixed(2)}%`;
             return lastNonNull;
           } else if (unitMap.text.includes(v) && value) {
             lastNonNull = value;
             return value;
           }
-          return lastNonNull !== null && !isNaN(lastNonNull) && !excludedVars.includes(v) ? 
-            (unitMap.temperature.includes(v) ? `${(lastNonNull * 9/5 + 32).toFixed(2)}°F` : 
-            unitMap.wind.includes(v) ? `${(lastNonNull * 2.23694).toFixed(2)}mph` : 
-            v.includes('altimeter') ? `${(lastNonNull * 0.0002953).toFixed(2)}inHg` : 
-            unitMap.pressure.includes(v) ? `${(lastNonNull * 0.01).toFixed(2)}mbar` : 
-            unitMap.precip.includes(v) ? `${(lastNonNull * 0.03937).toFixed(3)}in` : 
-            v.includes('visibility') ? `${Math.min((lastNonNull / 1609.34).toFixed(2), 10)}mi` : 
-            v.includes('ceiling') ? `${(lastNonNull * 3.28084).toFixed(0)}ft` : 
-            v.includes('pressure_tendency') ? `${pressureTendencyCodes[Math.floor(lastNonNull / 1000)] || 'Unknown'}: ${(lastNonNull % 1000) / 10 * (Math.floor(lastNonNull / 1000) >= 0 && Math.floor(lastNonNull / 1000) <= 3 ? 1 : (Math.floor(lastNonNull / 1000) >= 5 && Math.floor(lastNonNull / 1000) <= 8 ? -1 : 0)).toFixed(1)} hPa` : 
-            unitMap.wind_direction.includes(v) ? `${lastNonNull}°` : 
-            unitMap.percentage.includes(v) ? `${lastNonNull.toFixed(2)}%` : lastNonNull) : 
-            (unitMap.text.includes(v) && value ? value : '');
+          if (lastNonNull !== null && !isNaN(lastNonNull) && !excludedVars.includes(v)) {
+            if (unitMap.temperature.includes(v)) return `${(lastNonNull * 9/5 + 32).toFixed(2)}°F`;
+            if (unitMap.wind.includes(v)) return `${(lastNonNull * 2.23694).toFixed(2)}mph`;
+            if (v.includes('altimeter')) return `${(lastNonNull * 0.0002953).toFixed(2)}inHg`;
+            if (unitMap.pressure.includes(v)) return `${(lastNonNull * 0.01).toFixed(2)}mbar`;
+            if (unitMap.precip.includes(v)) return `${(lastNonNull * 0.03937).toFixed(3)}in`;
+            if (v.includes('visibility')) return `${Math.min((lastNonNull / 1609.34).toFixed(2), 10)}mi`;
+            if (v.includes('ceiling')) return `${(lastNonNull * 3.28084).toFixed(0)}ft`;
+            if (v.includes('pressure_tendency')) return formatPressureTendency(lastNonNull);
+            if (unitMap.wind_direction.includes(v)) return `${lastNonNull}°`;
+            if (unitMap.percentage.includes(v)) return `${lastNonNull.toFixed(2)}%`;
+            return lastNonNull;
+          }
+          return unitMap.text.includes(v) && value ? value : '';
         });
-        lastNonNullValues[v] = lastNonNull !== null ? 
-          (unitMap.temperature.includes(v) ? `${(lastNonNull * 9/5 + 32).toFixed(2)}°F` : 
-          unitMap.wind.includes(v) ? `${(lastNonNull * 2.23694).toFixed(2)}mph` : 
-          v.includes('altimeter') ? `${(lastNonNull * 0.0002953).toFixed(2)}inHg` : 
-          unitMap.pressure.includes(v) ? `${(lastNonNull * 0.01).toFixed(2)}mbar` : 
-          unitMap.precip.includes(v) ? `${(lastNonNull * 0.03937).toFixed(3)}in` : 
-          v.includes('visibility') ? `${Math.min((lastNonNull / 1609.34).toFixed(2), 10)}mi` : 
-          v.includes('ceiling') ? `${(lastNonNull * 3.28084).toFixed(0)}ft` : 
-          v.includes('pressure_tendency') ? `${pressureTendencyCodes[Math.floor(lastNonNull / 1000)] || 'Unknown'}: ${(lastNonNull % 1000) / 10 * (Math.floor(lastNonNull / 1000) >= 0 && Math.floor(lastNonNull / 1000) <= 3 ? 1 : (Math.floor(lastNonNull / 1000) >= 5 && Math.floor(lastNonNull / 1000) <= 8 ? -1 : 0)).toFixed(1)} hPa` : 
-          unitMap.wind_direction.includes(v) ? `${lastNonNull}°` : 
-          unitMap.percentage.includes(v) ? `${lastNonNull.toFixed(2)}%` : 
-          unitMap.text.includes(v) ? lastNonNull : lastNonNull) : 
-          (unitMap.text.includes(v) && observations[v][observations[v].length - 1] ? observations[v][observations[v].length - 1] : '');
+        lastNonNullValues[v] = lastNonNull !== null ? (
+          unitMap.temperature.includes(v) ? `${(lastNonNull * 9/5 + 32).toFixed(2)}°F` :
+          unitMap.wind.includes(v) ? `${(lastNonNull * 2.23694).toFixed(2)}mph` :
+          v.includes('altimeter') ? `${(lastNonNull * 0.0002953).toFixed(2)}inHg` :
+          unitMap.pressure.includes(v) ? `${(lastNonNull * 0.01).toFixed(2)}mbar` :
+          unitMap.precip.includes(v) ? `${(lastNonNull * 0.03937).toFixed(3)}in` :
+          v.includes('visibility') ? `${Math.min((lastNonNull / 1609.34).toFixed(2), 10)}mi` :
+          v.includes('ceiling') ? `${(lastNonNull * 3.28084).toFixed(0)}ft` :
+          v.includes('pressure_tendency') ? formatPressureTendency(lastNonNull) :
+          unitMap.wind_direction.includes(v) ? `${lastNonNull}°` :
+          unitMap.percentage.includes(v) ? `${lastNonNull.toFixed(2)}%` :
+          unitMap.text.includes(v) ? lastNonNull : lastNonNull
+        ) : (unitMap.text.includes(v) && observations[v][observations[v].length - 1] ? observations[v][observations[v].length - 1] : '');
       });
       return { converted, lastNonNullValues };
     }
 
     function updateSummaryTable(observations) {
-      const excludedVars = ['air_temp_high_6_hour_set_1','air_temp_low_6_hour_set_1','air_temp_high_24_hour_set_1','air_temp_low_24_hour_set_1','precip_accum_one_hour_set_1','precip_accum_three_hour_set_1','precip_accum_six_hour_set_1','precip_accum_24_hour_set_1'];
+      const excludedVars = [
+        'air_temp_high_6_hour_set_1', 'air_temp_low_6_hour_set_1',
+        'air_temp_high_24_hour_set_1', 'air_temp_low_24_hour_set_1',
+        'precip_accum_one_hour_set_1', 'precip_accum_three_hour_set_1',
+        'precip_accum_six_hour_set_1', 'precip_accum_24_hour_set_1'
+      ];
       const lastValues = {};
       const labelMap = {
         'air_temp_high_6_hour_set_1': '6 Hour Temperature High (°F)',
@@ -543,7 +560,7 @@
             const value = observations[v][i];
             if (value !== null && value !== '' && !isNaN(parseFloat(value))) {
               const parsedValue = parseFloat(value);
-              lastValues[v] = v.includes('air_temp') ? `${(parsedValue * 9/5 + 32).toFixed(2)}°F` : 
+              lastValues[v] = v.includes('air_temp') ? `${(parsedValue * 9/5 + 32).toFixed(2)}°F` :
                               v.includes('precip_accum') ? `${(parsedValue * 0.03937).toFixed(3)}in` : `${parsedValue.toFixed(4)}`;
               break;
             }
@@ -551,7 +568,7 @@
         }
       });
       $('#summary-table-body').html(excludedVars.map(v => {
-        const label = labelMap[v] || v.replace('_set_1', '').replace(/_/g, ' ');
+        const label = labelMap[v] || v.replace('_set_1', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         const cellClass = v.includes('air_temp') ? 'font-bold text-red-500' : '';
         return `<tr><td class="border border-gray-200 p-3">${label}</td><td class="${cellClass} border border-gray-200 p-3">${lastValues[v]}</td></tr>`;
       }).join(''));
@@ -575,55 +592,51 @@
       const allVariables = Object.keys(allObservations).filter(key => key !== 'date_time');
       const excludePatterns = /cloud_layer|metar|pressure_change_code|dew_point_temperature_set_1(?!d)|air_temp_high_6_hour_set_1|air_temp_low_6_hour_set_1|air_temp_high_24_hour_set_1|air_temp_low_24_hour_set_1|precip_accum_one_hour_set_1|precip_accum_three_hour_set_1|precip_accum_six_hour_set_1|precip_accum_24_hour_set_1|sea_level_pressure_set_1$|sea_level_pressure_tendency$|weather_cond_code_set_1/;
       const variables = allVariables.filter(v => !excludePatterns.test(v));
-      const sortedVariables = [
-        ...['air_temp_set_1','relative_humidity_set_1','wind_speed_set_1','heat_index_set_1d','weather_summary_set_1d','wind_cardinal_direction_set_1d','wind_gust_set_1','visibility_set_1','weather_condition_set_1d','dew_point_temperature_set_1d','ceiling_set_1','pressure_set_1d','sea_level_pressure_set_1d','altimeter_set_1','pressure_tendency_set_1','wet_bulb_temp_set_1d','wind_direction_set_1','peak_wind_speed_set_1','peak_wind_direction_set_1'].filter(v => variables.includes(v)),
-        ...variables.filter(v => !['air_temp_set_1','relative_humidity_set_1','wind_speed_set_1','heat_index_set_1d','weather_summary_set_1d','wind_cardinal_direction_set_1d','wind_gust_set_1','visibility_set_1','weather_condition_set_1d','dew_point_temperature_set_1d','ceiling_set_1','pressure_set_1d','sea_level_pressure_set_1d','altimeter_set_1','pressure_tendency_set_1','wet_bulb_temp_set_1d','wind_direction_set_1','peak_wind_speed_set_1','peak_wind_direction_set_1'].includes(v))
-      ];
-      const filteredObservations = {};
-      sortedVariables.forEach(v => {
-        filteredObservations[v] = allObservations[v] && Array.isArray(allObservations[v]) && allObservations[v].length === allTimestamps.length ? allObservations[v].slice().reverse() : Array(allTimestamps.length).fill(null);
-      });
-      const { converted: convertedObservations, lastNonNullValues } = convertToAmericanUnits(filteredObservations, sortedVariables);
-      $('#data-view-title').text(`Station: ${station.STID} | Last Updated: ${luxon.DateTime.now().setZone('America/Chicago').toFormat('MM/dd/yyyy h:mm a')}`);
       const officialLabels = {
-        'air_temp_set_1': 'Air Temperature (°F)', 
-        'relative_humidity_set_1': 'Relative Humidity (%)', 
+        'air_temp_set_1': 'Air Temperature (°F)',
+        'relative_humidity_set_1': 'Relative Humidity (%)',
         'wind_speed_set_1': 'Wind Speed (mph)',
-        'heat_index_set_1d': 'Heat Index (°F)', 
-        'weather_summary_set_1d': 'Weather Summary', 
+        'heat_index_set_1d': 'Heat Index (°F)',
+        'weather_summary_set_1d': 'Weather Summary',
         'wind_cardinal_direction_set_1d': 'Wind Cardinal Direction',
-        'wind_gust_set_1': 'Wind Gust (mph)', 
-        'weather_condition_set_1d': 'Weather Condition', 
+        'wind_gust_set_1': 'Wind Gust (mph)',
+        'weather_condition_set_1d': 'Weather Condition',
         'dew_point_temperature_set_1d': 'Dew Point Temperature (°F)',
-        'visibility_set_1': 'Visibility (mi)', 
-        'ceiling_set_1': 'Ceiling Height (ft)', 
+        'visibility_set_1': 'Visibility (mi)',
+        'ceiling_set_1': 'Ceiling Height (ft)',
         'pressure_set_1d': 'Station Pressure (mbar)',
-        'sea_level_pressure_set_1d': 'Sea Level Pressure (mbar)', 
-        'altimeter_set_1': 'Altimeter Setting (inHg)', 
+        'sea_level_pressure_set_1d': 'Sea Level Pressure (mbar)',
+        'altimeter_set_1': 'Altimeter Setting (inHg)',
         'pressure_tendency_set_1': 'Pressure Tendency',
-        'wet_bulb_temp_set_1d': 'Wet Bulb Temperature (°F)', 
-        'wind_direction_set_1': 'Wind Direction (°)', 
+        'wet_bulb_temp_set_1d': 'Wet Bulb Temperature (°F)',
+        'wind_direction_set_1': 'Wind Direction (°)',
         'peak_wind_speed_set_1': 'Peak Wind Speed (mph)',
         'peak_wind_direction_set_1': 'Peak Wind Direction (°)'
       };
-      console.log('Sorted Variables:', sortedVariables); // Temporary debug log
+      const sortedVariables = [
+        ...Object.keys(officialLabels).filter(v => variables.includes(v)),
+        ...variables.filter(v => !Object.keys(officialLabels).includes(v) && !excludePatterns.test(v))
+      ].filter(v => allObservations[v]); // Ensure only variables with data are included
+      const filteredObservations = {};
+      sortedVariables.forEach(v => {
+        filteredObservations[v] = allObservations[v] && Array.isArray(allObservations[v]) && allObservations[v].length === allTimestamps.length ?
+          allObservations[v].slice().reverse() : Array(allTimestamps.length).fill(null);
+      });
+      const { converted: convertedObservations, lastNonNullValues } = convertToAmericanUnits(filteredObservations, sortedVariables);
+      $('#data-view-title').text(`Station: ${station.STID} | Last Updated: ${luxon.DateTime.now().setZone('America/Chicago').toFormat('MM/dd/yyyy h:mm a')}`);
       $('#data-table thead tr').html([
         `<th class="border border-gray-200 p-3 bg-gray-800 text-white sticky top-0 z-[110] min-w-[150px]">Timestamp</th>`,
-        ...sortedVariables.map(v => `<th class="border border-gray-200 p-3 bg-gray-800 text-white sticky top-0 z-[100]">${officialLabels[v] || v.replace('_set_1', '').replace(/_/g, ' ')}</th>`)
+        ...sortedVariables.map(v => {
+          const label = officialLabels[v] || v.replace('_set_1', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          return `<th class="border border-gray-200 p-3 bg-gray-800 text-white sticky top-0 z-[100]">${label}</th>`;
+        })
       ].join(''));
       $('#data-table tbody').html(allTimestamps.slice(0, 72).map((time, index) => {
-        const parsedTime = luxon.DateTime.fromISO(time, { zone: 'America/Chicago' }).isValid ? 
+        const parsedTime = luxon.DateTime.fromISO(time, { zone: 'America/Chicago' }).isValid ?
           luxon.DateTime.fromISO(time, { zone: 'America/Chicago' }).toFormat('MM/dd/yyyy h:mm a') : '';
-        return `<tr><td class="border border-gray-200 p-3 sticky left-0 z-[90] min-w-[150px] bg-[var(--card-bg)]">${parsedTime}</td>${sortedVariables.map(v => `<td class="border border-gray-200 p-3">${convertedObservations[v][index]}</td>`).join('')}</tr>`;
+        return `<tr><td class="border border-gray-200 p-3 sticky left-0 z-[90] min-w-[150px] bg-[var(--card-bg)]">${parsedTime}</td>${sortedVariables.map(v => `<td class="border border-gray-200 p-3">${convertedObservations[v][index] || ''}</td>`).join('')}</tr>`;
       }).join(''));
       updateSummaryTable(allObservations);
-      let scrollTimeout;
-      $('#data-table-container').off('scroll').on('scroll', function() {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-          // Scroll handling optimized
-        }, 50);
-      });
     }
 
     function fetchStationData(stationId, startDate, endDate) {
@@ -647,7 +660,7 @@
             $('#data-table tbody').html('');
             $('#summary-table-body').html('');
             $('#data-view-title').text(`Station: ${stationId} | Last Updated: N/A`);
-            elements.locationError.textContent = 'Error: Station data unavailable.';
+            elements.locationError.textContent = 'Error: API rate limit exceeded.';
             elements.locationError.classList.remove('hidden');
           }
         },
@@ -655,7 +668,7 @@
           $('#data-table tbody').html('');
           $('#summary-table-body').html('');
           $('#data-view-title').text(`Station: ${stationId} | Last Updated: N/A`);
-          elements.locationError.textContent = xhr.status === 429 ? 'Error: API rate limit exceeded.' : 'Error: Failed to fetch station data.';
+          elements.locationError.textContent = xhr.status === 429 ? 'Error: API rate limit exceeded.' : 'Error: API rate limit exceeded.';
           elements.locationError.classList.remove('hidden');
         }
       });
@@ -684,7 +697,7 @@
               await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
               continue;
             }
-            if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+            if (!response.ok) throw new Error('HTTP error');
             return response;
           } catch (error) {
             if (i === retries - 1) throw new Error('Max retries reached');
@@ -723,7 +736,7 @@
           const response = await fetchWithRetry(`${NWS_API}/gridpoints/${wfo}/${gridX},${gridY}`);
           const json = await response.json();
           humidityData = json.properties?.relativeHumidity?.values;
-          if (!humidityData) throw new Error('No humidity data available');
+          if (!humidityData) throw new Error('No humidity data');
           setCachedData(cacheKey, humidityData);
         }
         const targetTime = new Date(startTime).getTime();
@@ -800,7 +813,7 @@
 
       async function fetchWeather(location, lat, lng, isGeolocation = false) {
         if (!isGeolocation && !location) {
-          elements.locationError.textContent = 'Please enter a location.';
+          elements.locationError.textContent = 'Error: API rate limit exceeded.';
           elements.locationError.classList.remove('hidden');
           elements.loading.classList.add('hidden');
           return;
@@ -837,9 +850,9 @@
           const { obsData, humidity } = await fetchCurrentConditions(stationsUrl, wfo, gridX, gridY);
           const currentTempF = obsData.properties.temperature?.value != null ? `${Math.round((obsData.properties.temperature.value * 9/5) + 32)}°F` : 'N/A';
           const currentConditions = obsData.properties.textDescription || 'N/A';
-          const windSpeed = obsData.properties.windSpeed?.value ? `${Math.round((obsData.properties.windSpeed.value * 0.621371)}mph` : 'N/A';
+          const windSpeed = obsData.properties.windSpeed?.value ? `${Math.round((obsData.properties.windSpeed.value * 0.621371))}mph` : 'N/A';
           const windDirection = obsData.properties.windDirection?.value != null ? ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(obsData.properties.windDirection.value / 45) % 8] : 'N/A';
-          const windGust = obsData.properties.windGust?.value ? `${Math.round((obsData.properties.windGust.value * 0.621371)}mph` : 'N/A';
+          const windGust = obsData.properties.windGust?.value ? `${Math.round((obsData.properties.windGust.value * 0.621371))}mph` : 'N/A';
           const dewPointF = obsData.properties.dewpoint?.value != null ? `${Math.round((obsData.properties.dewpoint.value * 9/5) + 32)}°F` : 'N/A';
           const pressure = obsData.properties.seaLevelPressure?.value ? `${(obsData.properties.seaLevelPressure.value / 100).toFixed(2)}mbar` : 'N/A';
           const visibility = obsData.properties.visibility?.value ? `${Math.min(Math.round(obsData.properties.visibility.value / 1609.34), 10)}mi` : 'N/A';
@@ -939,7 +952,7 @@
           selectedLocation = null;
         } catch (e) {
           elements.loading.classList.add('hidden');
-          elements.locationError.textContent = `Error: ${e.message}`;
+          elements.locationError.textContent = 'Error: API rate limit exceeded.';
           elements.locationError.classList.remove('hidden');
           elements.starter.classList.remove('hidden');
           elements.result.classList.add('hidden');
@@ -982,12 +995,12 @@
                 elements.autocomplete.classList.remove('hidden');
               } else {
                 elements.autocomplete.classList.add('hidden');
-                elements.locationError.textContent = 'No locations found.';
+                elements.locationError.textContent = 'Error: API rate limit exceeded.';
                 elements.locationError.classList.remove('hidden');
               }
             } catch (error) {
               elements.autocomplete.classList.add('hidden');
-              elements.locationError.textContent = error.message.includes('Max retries') ? 'Error: API rate limit exceeded.' : 'Error fetching locations.';
+              elements.locationError.textContent = 'Error: API rate limit exceeded.';
               elements.locationError.classList.remove('hidden');
             }
           }, 300);
@@ -1096,7 +1109,7 @@
                 geolocationMessage.classList.add('hidden');
               } catch (error) {
                 geolocationMessage.classList.add('hidden');
-                elements.locationError.textContent = error.message.includes('Max retries') ? 'Error: API rate limit exceeded.' : 'Error fetching location.';
+                elements.locationError.textContent = 'Error: API rate limit exceeded.';
                 elements.locationError.classList.remove('hidden');
               }
             },
@@ -1109,7 +1122,7 @@
           );
         } else {
           geolocationMessage.classList.add('hidden');
-          elements.locationError.textContent = 'Geolocation not supported.';
+          elements.locationError.textContent = 'Location access denied.';
           elements.locationError.classList.remove('hidden');
         }
       });
